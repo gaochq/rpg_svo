@@ -37,63 +37,63 @@ class Point;
 class Reprojector
 {
 public:
-  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-  /// Reprojector config parameters
-  struct Options {
-    size_t max_n_kfs;   //!< max number of keyframes to reproject from
-    bool find_match_direct;
-    Options()
-    : max_n_kfs(10),
-      find_match_direct(true)
-    {}
-  } options_;
-
-  size_t n_matches_;
-  size_t n_trials_;
-
-  Reprojector(vk::AbstractCamera* cam, Map& map);
-
-  ~Reprojector();
-
-  /// Project points from the map into the image. First finds keyframes with
-  /// overlapping field of view and projects only those map-points.
-  void reprojectMap(
-      FramePtr frame,
-      std::vector< std::pair<FramePtr,std::size_t> >& overlap_kfs);
-
-private:
-
-  /// A candidate is a point that projects into the image plane and for which we
-  /// will search a maching feature in the image.
-  struct Candidate {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    Point* pt;       //!< 3D point.
-    Vector2d px;     //!< projected 2D pixel location.
-    Candidate(Point* pt, Vector2d& px) : pt(pt), px(px) {}
-  };
-  typedef std::list<Candidate > Cell;
-  typedef std::vector<Cell*> CandidateGrid;
 
-  /// The grid stores a set of candidate matches. For every grid cell we try to find one match.
-  struct Grid
-  {
-    CandidateGrid cells;
-    vector<int> cell_order;
-    int cell_size;
-    int grid_n_cols;
-    int grid_n_rows;
-  };
+    /// Reprojector config parameters
+    struct Options
+    {
+        size_t max_n_kfs;   //!< max number of keyframes to reproject from
+        bool find_match_direct;
+        Options()
+        : max_n_kfs(10),
+          find_match_direct(true)
+        {}
+    } options_;
 
-  Grid grid_;
-  Matcher matcher_;
-  Map& map_;
+    size_t n_matches_;
+    size_t n_trials_;
 
-  static bool pointQualityComparator(Candidate& lhs, Candidate& rhs);
-  void initializeGrid(vk::AbstractCamera* cam);
-  void resetGrid();
-  bool reprojectCell(Cell& cell, FramePtr frame);
-  bool reprojectPoint(FramePtr frame, Point* point);
+    Reprojector(vk::AbstractCamera* cam, Map& map);
+
+    ~Reprojector();
+
+    /// Project points from the map into the image. First finds keyframes with
+    /// overlapping field of view and projects only those map-points.
+    void reprojectMap(FramePtr frame, std::vector< std::pair<FramePtr,std::size_t> >& overlap_kfs);
+
+    private:
+
+    /// A candidate is a point that projects into the image plane and for which we
+    /// will search a maching feature in the image.
+    struct Candidate
+    {
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+        Point* pt;       //!< 3D point.
+        Vector2d px;     //!< projected 2D pixel location.
+        Candidate(Point* pt, Vector2d& px) : pt(pt), px(px) {}
+    };
+    typedef std::list<Candidate > Cell;
+    typedef std::vector<Cell*> CandidateGrid;
+
+    /// The grid stores a set of candidate matches. For every grid cell we try to find one match.
+    struct Grid
+    {
+        CandidateGrid cells;        //! 存放3D点和对应投影的2D像素坐标
+        vector<int> cell_order;     //！ 单元格的顺序编号
+        int cell_size;              //！ 图像划分单元格的列数
+        int grid_n_cols;            //！ 图像划分单元格的行数
+        int grid_n_rows;
+    };
+
+    Grid grid_;
+    Matcher matcher_;
+    Map& map_;
+
+    static bool pointQualityComparator(Candidate& lhs, Candidate& rhs);
+    void initializeGrid(vk::AbstractCamera* cam);
+    void resetGrid();
+    bool reprojectCell(Cell& cell, FramePtr frame);
+    bool reprojectPoint(FramePtr frame, Point* point);
 };
 
 } // namespace svo

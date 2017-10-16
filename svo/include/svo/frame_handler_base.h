@@ -49,12 +49,14 @@ public:
     STAGE_DEFAULT_FRAME,
     STAGE_RELOCALIZING
   };
-  enum TrackingQuality {
+  enum TrackingQuality
+  {
     TRACKING_INSUFFICIENT,
     TRACKING_BAD,
     TRACKING_GOOD
   };
-  enum UpdateResult {
+  enum UpdateResult
+  {
     RESULT_NO_KEYFRAME,
     RESULT_IS_KEYFRAME,
     RESULT_FAILURE

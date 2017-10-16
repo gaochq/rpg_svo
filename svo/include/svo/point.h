@@ -46,7 +46,7 @@ public:
 
   static int                  point_counter_;           //!< Counts the number of created points. Used to set the unique id.
   int                         id_;                      //!< Unique ID of the point.
-  Vector3d                    pos_;                     //!< 3d pos of the point in the world coordinate frame.
+  Vector3d                    pos_;                     //!< 3d pos of the point in the world coordinate frame.   3D点在世界坐标系下的坐标
   Vector3d                    normal_;                  //!< Surface normal at point.
   Matrix3d                    normal_information_;      //!< Inverse covariance matrix of normal estimation.
   bool                        normal_set_;              //!< Flag whether the surface normal was estimated or not.
@@ -86,10 +86,13 @@ public:
   void optimize(const size_t n_iter);
 
   /// Jacobian of point projection on unit plane (focal length = 1) in frame (f).
-  inline static void jacobian_xyz2uv(
-      const Vector3d& p_in_f,
-      const Matrix3d& R_f_w,
-      Matrix23d& point_jac)
+  //！ 在单位平面上投影的雅克比矩阵
+  /*
+   *  d[X/Z Y/Z 1/Z]^T   |1/Z  0  X/Z^2|
+   * _________________ = |0  1/Z  Y/Z^2|
+   *     d[X Y Z]        |   ...       |
+   */
+  inline static void jacobian_xyz2uv(const Vector3d& p_in_f, const Matrix3d& R_f_w, Matrix23d& point_jac)
   {
     const double z_inv = 1.0/p_in_f[2];
     const double z_inv_sq = z_inv*z_inv;

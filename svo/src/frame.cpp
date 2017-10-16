@@ -37,154 +37,180 @@ Frame::Frame(vk::AbstractCamera* cam, const cv::Mat& img, double timestamp) :
     is_keyframe_(false),
     v_kf_(NULL)
 {
-  initFrame(img);
+    initFrame(img);
 }
 
 Frame::~Frame()
 {
-  std::for_each(fts_.begin(), fts_.end(), [&](Feature* i){delete i;});
+    std::for_each(fts_.begin(), fts_.end(), [&](Feature* i){delete i;});
 }
 
+//! 初始化图像帧
 void Frame::initFrame(const cv::Mat& img)
 {
-  // check image
-  if(img.empty() || img.type() != CV_8UC1 || img.cols != cam_->width() || img.rows != cam_->height())
-    throw std::runtime_error("Frame: provided image has not the same size as the camera model or image is not grayscale");
+	// check image
+	if(img.empty() || img.type() != CV_8UC1 || img.cols != cam_->width() || img.rows != cam_->height())
+	throw std::runtime_error("Frame: provided image has not the same size as the camera model or image is not grayscale");
 
-  // Set keypoints to NULL
-  std::for_each(key_pts_.begin(), key_pts_.end(), [&](Feature* ftr){ ftr=NULL; });
+	// Set keypoints to NULL
+	std::for_each(key_pts_.begin(), key_pts_.end(), [&](Feature* ftr){ ftr=NULL; });
 
-  // Build Image Pyramid
-  frame_utils::createImgPyramid(img, max(Config::nPyrLevels(), Config::kltMaxLevel()+1), img_pyr_);
+	// Build Image Pyramid
+	frame_utils::createImgPyramid(img, max(Config::nPyrLevels(), Config::kltMaxLevel()+1), img_pyr_);
 }
 
+//! 设定关键帧
 void Frame::setKeyframe()
 {
-  is_keyframe_ = true;
-  setKeyPoints();
+    is_keyframe_ = true;
+    setKeyPoints();
 }
 
 void Frame::addFeature(Feature* ftr)
 {
-  fts_.push_back(ftr);
+    fts_.push_back(ftr);
 }
 
+//！设定关键点
 void Frame::setKeyPoints()
 {
-  for(size_t i = 0; i < 5; ++i)
-    if(key_pts_[i] != NULL)
-      if(key_pts_[i]->point == NULL)
-        key_pts_[i] = NULL;
+    //！ 特征点对应的3D点也不允许为空
+    for(size_t i = 0; i < 5; ++i)
+        if(key_pts_[i] != NULL)
+            if(key_pts_[i]->point == NULL)
+                key_pts_[i] = NULL;
 
-  std::for_each(fts_.begin(), fts_.end(), [&](Feature* ftr){ if(ftr->point != NULL) checkKeyPoints(ftr); });
+    //！
+    std::for_each(fts_.begin(), fts_.end(), [&](Feature* ftr){ if(ftr->point != NULL) checkKeyPoints(ftr); });
 }
 
+//! 得到5个关键点
+/*  5个关键点的分布，中心关键点0，以离(cu,cv)尽可能近的原则选择，关键点1,2,3,4以以离(cu,cv)尽可能远的原则选择
+ * ______________
+ *|   3  |   4   |
+ *|_____0|_______|
+ *|   2  |   1   |
+ *|______|_______|
+ *
+ */
 void Frame::checkKeyPoints(Feature* ftr)
 {
-  const int cu = cam_->width()/2;
-  const int cv = cam_->height()/2;
+    const int cu = cam_->width()/2;
+    const int cv = cam_->height()/2;
 
-  // center pixel
-  if(key_pts_[0] == NULL)
-    key_pts_[0] = ftr;
-  else if(std::max(std::fabs(ftr->px[0]-cu), std::fabs(ftr->px[1]-cv))
-        < std::max(std::fabs(key_pts_[0]->px[0]-cu), std::fabs(key_pts_[0]->px[1]-cv)))
-    key_pts_[0] = ftr;
+    // center pixel
+    //! 如果第一个关键点为空，则将ftr赋给第一个关键点
+    //！否则，则选择离相机中心更近的一个
+    if(key_pts_[0] == NULL)
+        key_pts_[0] = ftr;
+    else if(std::max(std::fabs(ftr->px[0]-cu), std::fabs(ftr->px[1]-cv))
+    < std::max(std::fabs(key_pts_[0]->px[0]-cu), std::fabs(key_pts_[0]->px[1]-cv)))
+        key_pts_[0] = ftr;
 
-  if(ftr->px[0] >= cu && ftr->px[1] >= cv)
-  {
-    if(key_pts_[1] == NULL)
-      key_pts_[1] = ftr;
-    else if((ftr->px[0]-cu) * (ftr->px[1]-cv)
-          > (key_pts_[1]->px[0]-cu) * (key_pts_[1]->px[1]-cv))
-      key_pts_[1] = ftr;
-  }
-  if(ftr->px[0] >= cu && ftr->px[1] < cv)
-  {
-    if(key_pts_[2] == NULL)
-      key_pts_[2] = ftr;
-    else if((ftr->px[0]-cu) * (ftr->px[1]-cv)
-          > (key_pts_[2]->px[0]-cu) * (key_pts_[2]->px[1]-cv))
-      key_pts_[2] = ftr;
-  }
-  if(ftr->px[0] < cv && ftr->px[1] < cv)
-  {
-    if(key_pts_[3] == NULL)
-      key_pts_[3] = ftr;
-    else if((ftr->px[0]-cu) * (ftr->px[1]-cv)
-          > (key_pts_[3]->px[0]-cu) * (key_pts_[3]->px[1]-cv))
-      key_pts_[3] = ftr;
-  }
-  if(ftr->px[0] < cv && ftr->px[1] >= cv)
-  {
-    if(key_pts_[4] == NULL)
-      key_pts_[4] = ftr;
-    else if((ftr->px[0]-cu) * (ftr->px[1]-cv)
-          > (key_pts_[4]->px[0]-cu) * (key_pts_[4]->px[1]-cv))
-      key_pts_[4] = ftr;
-  }
+    //! 依据(cu, cv)将图像分为4块，由右下角到右上角(顺时针)对应后四个关键点
+    //！ 然后依次判断每一个特征点，将其给每个区域对应的关键点，如果关键点已存在则选择离中心点最远的一个
+    if(ftr->px[0] >= cu && ftr->px[1] >= cv)
+    {
+        if(key_pts_[1] == NULL)
+            key_pts_[1] = ftr;
+        else if((ftr->px[0]-cu) * (ftr->px[1]-cv)
+        > (key_pts_[1]->px[0]-cu) * (key_pts_[1]->px[1]-cv))
+            key_pts_[1] = ftr;
+    }
+    if(ftr->px[0] >= cu && ftr->px[1] < cv)
+    {
+        if(key_pts_[2] == NULL)
+            key_pts_[2] = ftr;
+        else if((ftr->px[0]-cu) * (ftr->px[1]-cv)
+        > (key_pts_[2]->px[0]-cu) * (key_pts_[2]->px[1]-cv))
+            key_pts_[2] = ftr;
+    }
+    if(ftr->px[0] < cv && ftr->px[1] < cv)
+    {
+        if(key_pts_[3] == NULL)
+            key_pts_[3] = ftr;
+        else if((ftr->px[0]-cu) * (ftr->px[1]-cv)
+        > (key_pts_[3]->px[0]-cu) * (key_pts_[3]->px[1]-cv))
+            key_pts_[3] = ftr;
+    }
+    if(ftr->px[0] < cv && ftr->px[1] >= cv)
+    {
+        if(key_pts_[4] == NULL)
+            key_pts_[4] = ftr;
+        else if((ftr->px[0]-cu) * (ftr->px[1]-cv)
+        > (key_pts_[4]->px[0]-cu) * (key_pts_[4]->px[1]-cv))
+            key_pts_[4] = ftr;
+    }
 }
 
+//! 判断ftr在frame中是否是关键点
 void Frame::removeKeyPoint(Feature* ftr)
 {
-  bool found = false;
-  std::for_each(key_pts_.begin(), key_pts_.end(), [&](Feature*& i){
-    if(i == ftr) {
-      i = NULL;
-      found = true;
-    }
-  });
-  if(found)
-    setKeyPoints();
+    bool found = false;
+    std::for_each(key_pts_.begin(), key_pts_.end(), [&](Feature*& i){
+        if(i == ftr)
+        {
+            i = NULL;
+            found = true;
+        }
+    });
+    //! 如果是，则删除该关键点，重新在本帧中寻找
+    //! QUES：可是这样还是会选到删除的这个feature的位置啊
+    if(found)
+        setKeyPoints();
 }
 
+//! 判断该3D点对于关键帧是否可观测
+//! 转到图像坐标系下，看是否还在图像上即可
 bool Frame::isVisible(const Vector3d& xyz_w) const
 {
-  Vector3d xyz_f = T_f_w_*xyz_w;
-  if(xyz_f.z() < 0.0)
-    return false; // point is behind the camera
-  Vector2d px = f2c(xyz_f);
-  if(px[0] >= 0.0 && px[1] >= 0.0 && px[0] < cam_->width() && px[1] < cam_->height())
-    return true;
-  return false;
+    Vector3d xyz_f = T_f_w_*xyz_w;
+    if(xyz_f.z() < 0.0)
+        return false; // point is behind the camera
+    Vector2d px = f2c(xyz_f);
+    if(px[0] >= 0.0 && px[1] >= 0.0 && px[0] < cam_->width() && px[1] < cam_->height())
+        return true;
+    return false;
 }
 
 
 /// Utility functions for the Frame class
 namespace frame_utils {
 
+//! 半采样建立图像金字塔
 void createImgPyramid(const cv::Mat& img_level_0, int n_levels, ImgPyr& pyr)
 {
-  pyr.resize(n_levels);
-  pyr[0] = img_level_0;
-  for(int i=1; i<n_levels; ++i)
-  {
-    pyr[i] = cv::Mat(pyr[i-1].rows/2, pyr[i-1].cols/2, CV_8U);
-    vk::halfSample(pyr[i-1], pyr[i]);
-  }
+    pyr.resize(n_levels);
+    pyr[0] = img_level_0;
+    for(int i=1; i<n_levels; ++i)
+    {
+        pyr[i] = cv::Mat(pyr[i-1].rows/2, pyr[i-1].cols/2, CV_8U);
+        vk::halfSample(pyr[i-1], pyr[i]);
+    }
 }
 
+//! 获取该帧中所有特征点深度值的平均值和最小值(相机坐标系下)
 bool getSceneDepth(const Frame& frame, double& depth_mean, double& depth_min)
 {
-  vector<double> depth_vec;
-  depth_vec.reserve(frame.fts_.size());
-  depth_min = std::numeric_limits<double>::max();
-  for(auto it=frame.fts_.begin(), ite=frame.fts_.end(); it!=ite; ++it)
-  {
-    if((*it)->point != NULL)
+    vector<double> depth_vec;
+    depth_vec.reserve(frame.fts_.size());
+    depth_min = std::numeric_limits<double>::max();
+    for(auto it=frame.fts_.begin(), ite=frame.fts_.end(); it!=ite; ++it)
     {
-      const double z = frame.w2f((*it)->point->pos_).z();
-      depth_vec.push_back(z);
-      depth_min = fmin(z, depth_min);
+        if((*it)->point != NULL)
+        {
+            const double z = frame.w2f((*it)->point->pos_).z();
+            depth_vec.push_back(z);
+            depth_min = fmin(z, depth_min);
+        }
     }
-  }
-  if(depth_vec.empty())
-  {
-    SVO_WARN_STREAM("Cannot set scene depth. Frame has no point-observations!");
-    return false;
-  }
-  depth_mean = vk::getMedian(depth_vec);
-  return true;
+    if(depth_vec.empty())
+    {
+        SVO_WARN_STREAM("Cannot set scene depth. Frame has no point-observations!");
+        return false;
+    }
+    depth_mean = vk::getMedian(depth_vec);
+        return true;
 }
 
 } // namespace frame_utils

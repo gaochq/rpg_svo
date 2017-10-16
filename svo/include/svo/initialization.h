@@ -48,7 +48,7 @@ protected:
   vector<Vector3d> f_cur_;          //!< bearing vectors corresponding to the keypoints in the current image.
   vector<double> disparities_;      //!< disparity between first and second frame.
   vector<int> inliers_;             //!< inliers after the geometric check (e.g., Homography).
-  vector<Vector3d> xyz_in_cur_;     //!< 3D points computed during the geometric check.
+  vector<Vector3d> xyz_in_cur_;     //!< 3D points computed during the geometric check. 在计算H矩阵中，计算出的3D点
   SE3 T_cur_from_ref_;              //!< computed transformation between the first two frames.
 };
 

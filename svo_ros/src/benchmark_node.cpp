@@ -177,82 +177,84 @@ void BenchmarkNode::addNoiseToImage(cv::Mat& img, double sigma)
 
 void BenchmarkNode::runBlenderBenchmark(const std::string& dataset_dir)
 {
-  // create image reader and load dataset
-  std::string filename_benchmark(dataset_dir + "/trajectory.txt");
-  vk::FileReader<vk::blender_utils::file_format::ImageNameAndPose> dataset_reader(filename_benchmark);
-  dataset_reader.skipComments();
-  if(!dataset_reader.next()) {
-    SVO_ERROR_STREAM("Failed opening dataset: "<<filename_benchmark);
-    return;
-  }
-  std::vector<vk::blender_utils::file_format::ImageNameAndPose> dataset;
-  dataset_reader.readAllEntries(dataset);
-
-  // create tracefiles
-  trace_trans_error_.open(Config::traceDir() + "/translation_error.txt");
-  trace_rot_error_.open(Config::traceDir() + "/orientation_error.txt");
-  trace_depth_error_.open(Config::traceDir() + "/depth_error.txt");
-  if(trace_trans_error_.fail() || trace_rot_error_.fail() || trace_depth_error_.fail())
-    throw std::runtime_error("Could not create tracefile. Does folder exist?");
-
-  // process dataset
-  for(auto it = dataset.begin(); it != dataset.end() && ros::ok(); ++it, ++frame_count_)
-  {
-    // Read image, ground-truth depth-map and ground-truth pose
-    std::string img_filename(dataset_dir + "/img/" + it->image_name_ + "_0.png");
-    cv::Mat img(cv::imread(img_filename, 0));
-    if(img.empty()) {
-      SVO_ERROR_STREAM("Reading image "<<img_filename<<" failed.");
-      return;
-    }
-    if(img_noise_sigma_ > 0)
-      addNoiseToImage(img, img_noise_sigma_);
-    cv::Mat depthmap;
-    vk::blender_utils::loadBlenderDepthmap(
-        dataset_dir+"/depth/"+it->image_name_+"_0.depth", *cam_, depthmap);
-    Sophus::SE3 T_w_gt(it->q_, it->t_);
-
-    // Set reference frame with depth
-    if(frame_count_ == 0)
+    // create image reader and load dataset
+    std::string filename_benchmark(dataset_dir + "/trajectory.txt");
+    vk::FileReader<vk::blender_utils::file_format::ImageNameAndPose> dataset_reader(filename_benchmark);
+    dataset_reader.skipComments();
+    if(!dataset_reader.next())
     {
-      // set reference frame at ground-truth pose
-      FramePtr frame_ref(new Frame(cam_, img, it->timestamp_));
-      frame_ref->T_f_w_ = T_w_gt.inverse();
-
-      // extract features, generate features with 3D points
-      svo::feature_detection::FastDetector detector(
-          cam_->width(), cam_->height(), svo::Config::gridSize(), svo::Config::nPyrLevels());
-      detector.detect(frame_ref.get(), frame_ref->img_pyr_, svo::Config::triangMinCornerScore(), frame_ref->fts_);
-      std::for_each(frame_ref->fts_.begin(), frame_ref->fts_.end(), [&](Feature* ftr) {
-        Eigen::Vector3d pt_pos_cur = ftr->f*depthmap.at<float>(ftr->px[1], ftr->px[0]);
-        Eigen::Vector3d pt_pos_world = frame_ref->T_f_w_.inverse()*pt_pos_cur;
-        svo::Point* point = new svo::Point(pt_pos_world, ftr);
-        ftr->point = point;
-      });
-      SVO_INFO_STREAM("Added "<<frame_ref->nObs()<<" 3d pts to the reference frame.");
-      vo_->setFirstFrame(frame_ref);
-      SVO_INFO_STREAM("Set reference frame.");
+        SVO_ERROR_STREAM("Failed opening dataset: "<<filename_benchmark);
+        return;
     }
-    else
+    std::vector<vk::blender_utils::file_format::ImageNameAndPose> dataset;
+    dataset_reader.readAllEntries(dataset);
+
+    // create tracefiles
+    trace_trans_error_.open(Config::traceDir() + "/translation_error.txt");
+    trace_rot_error_.open(Config::traceDir() + "/orientation_error.txt");
+    trace_depth_error_.open(Config::traceDir() + "/depth_error.txt");
+    if(trace_trans_error_.fail() || trace_rot_error_.fail() || trace_depth_error_.fail())
+        throw std::runtime_error("Could not create tracefile. Does folder exist?");
+
+    // process dataset
+    for(auto it = dataset.begin(); it != dataset.end() && ros::ok(); ++it, ++frame_count_)
     {
-      SVO_DEBUG_STREAM("Processing image "<<it->image_name_<<".");
-      vo_->addImage(img, it->timestamp_);
-      visualizer_.publishMinimal(img, vo_->lastFrame(), *vo_, it->timestamp_);
-      visualizer_.visualizeMarkers(vo_->lastFrame(), vo_->coreKeyframes(), vo_->map());
-    }
+        // Read image, ground-truth depth-map and ground-truth pose
+        std::string img_filename(dataset_dir + "/img/" + it->image_name_ + "_0.png");
+        cv::Mat img(cv::imread(img_filename, 0));
+        if(img.empty())
+        {
+            SVO_ERROR_STREAM("Reading image "<<img_filename<<" failed.");
+            return;
+        }
+        if(img_noise_sigma_ > 0)
+          addNoiseToImage(img, img_noise_sigma_);
+        cv::Mat depthmap;
+        vk::blender_utils::loadBlenderDepthmap(
+            dataset_dir+"/depth/"+it->image_name_+"_0.depth", *cam_, depthmap);
+        Sophus::SE3 T_w_gt(it->q_, it->t_);
 
-    if(vo_->stage() != svo::FrameHandlerMono::STAGE_DEFAULT_FRAME)
-    {
-      SVO_ERROR_STREAM("SVO failed before entire dataset could be processed.");
-      break;
-    }
+        // Set reference frame with depth
+        if(frame_count_ == 0)
+        {
+            // set reference frame at ground-truth pose
+            FramePtr frame_ref(new Frame(cam_, img, it->timestamp_));
+            frame_ref->T_f_w_ = T_w_gt.inverse();
 
-    // Compute pose error and trace to file
-    Sophus::SE3 T_f_gt(vo_->lastFrame()->T_f_w_*T_w_gt);
-    tracePoseError(T_f_gt, it->timestamp_);
-    tracePose(vo_->lastFrame()->T_f_w_.inverse(), it->timestamp_);
-    traceDepthError(vo_->lastFrame(), depthmap);
-  }
+            // extract features, generate features with 3D points
+            svo::feature_detection::FastDetector detector(
+              cam_->width(), cam_->height(), svo::Config::gridSize(), svo::Config::nPyrLevels());
+            detector.detect(frame_ref.get(), frame_ref->img_pyr_, svo::Config::triangMinCornerScore(), frame_ref->fts_);
+            std::for_each(frame_ref->fts_.begin(), frame_ref->fts_.end(), [&](Feature* ftr) {
+            Eigen::Vector3d pt_pos_cur = ftr->f*depthmap.at<float>(ftr->px[1], ftr->px[0]);
+            Eigen::Vector3d pt_pos_world = frame_ref->T_f_w_.inverse()*pt_pos_cur;
+            svo::Point* point = new svo::Point(pt_pos_world, ftr);
+            ftr->point = point;
+            });
+            SVO_INFO_STREAM("Added "<<frame_ref->nObs()<<" 3d pts to the reference frame.");
+            vo_->setFirstFrame(frame_ref);
+            SVO_INFO_STREAM("Set reference frame.");
+        }
+        else
+        {
+            SVO_DEBUG_STREAM("Processing image "<<it->image_name_<<".");
+            vo_->addImage(img, it->timestamp_);
+            visualizer_.publishMinimal(img, vo_->lastFrame(), *vo_, it->timestamp_);
+            visualizer_.visualizeMarkers(vo_->lastFrame(), vo_->coreKeyframes(), vo_->map());
+        }
+
+        if(vo_->stage() != svo::FrameHandlerMono::STAGE_DEFAULT_FRAME)
+        {
+            SVO_ERROR_STREAM("SVO failed before entire dataset could be processed.");
+            break;
+        }
+
+        // Compute pose error and trace to file
+        Sophus::SE3 T_f_gt(vo_->lastFrame()->T_f_w_*T_w_gt);
+        tracePoseError(T_f_gt, it->timestamp_);
+        tracePose(vo_->lastFrame()->T_f_w_.inverse(), it->timestamp_);
+        traceDepthError(vo_->lastFrame(), depthmap);
+    }
 }
 
 } // namespace svo

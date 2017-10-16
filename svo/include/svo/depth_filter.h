@@ -36,8 +36,8 @@ struct Seed
 {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  static int batch_counter;
-  static int seed_counter;
+  static int batch_counter;     //!用于设置种子点对应帧的数目
+  static int seed_counter;      //！用于设置种子点唯一的id
   int batch_id;                //!< Batch id is the id of the keyframe for which the seed was created.
   int id;                      //!< Seed ID, only used for visualization.
   Feature* ftr;                //!< Feature in the keyframe for which the depth should be computed.
@@ -143,7 +143,7 @@ protected:
   boost::thread* thread_;
   std::queue<FramePtr> frame_queue_;
   boost::mutex frame_queue_mut_;
-  boost::condition_variable frame_queue_cond_;
+  boost::condition_variable frame_queue_cond_;  //! 唤醒某个等待的线程，若只有一个等待，咋唤醒这一个线程，若有多个，则被唤醒的线程不定
   FramePtr new_keyframe_;               //!< Next keyframe to extract new seeds.
   bool new_keyframe_set_;               //!< Do we have a new keyframe to process?.
   double new_keyframe_min_depth_;       //!< Minimum depth in the new keyframe. Used for range in new seeds.
