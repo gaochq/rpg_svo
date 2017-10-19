@@ -45,9 +45,8 @@ namespace feature_detection
     {
         std::for_each(fts.begin(), fts.end(), [&](Feature* i)
         {
-        grid_occupancy_.at(
-            static_cast<int>(i->px[1]/cell_size_)*grid_n_cols_
-            + static_cast<int>(i->px[0]/cell_size_)) = true;
+            grid_occupancy_.at(static_cast<int>(i->px[1]/cell_size_)*grid_n_cols_
+                               + static_cast<int>(i->px[0]/cell_size_)) = true;
         }
         );
     }
@@ -64,7 +63,7 @@ namespace feature_detection
         const int img_width,
         const int img_height,
         const int cell_size,
-        const int n_pyr_levels) :
+        const int n_pyr_levels):
             AbstractDetector(img_width, img_height, cell_size, n_pyr_levels)
     {}
 

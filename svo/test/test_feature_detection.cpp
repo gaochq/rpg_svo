@@ -1,18 +1,6 @@
-// This file is part of SVO - Semi-direct Visual Odometry.
 //
-// Copyright (C) 2014 Christian Forster <forster at ifi dot uzh dot ch>
-// (Robotics and Perception Group, University of Zurich, Switzerland).
+// Created by buyi on 17-10-17.
 //
-// SVO is free software: you can redistribute it and/or modify it under the
-// terms of the GNU General Public License as published by the Free Software
-// Foundation, either version 3 of the License, or any later version.
-//
-// SVO is distributed in the hope that it will be useful, but WITHOUT ANY
-// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-// FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <string.h>
 #include <svo/global.h>
@@ -27,51 +15,89 @@
 #include <vikit/atan_camera.h>
 #include "test_utils.h"
 
-namespace {
+#include <fstream>
 
-using namespace Eigen;
 using namespace std;
 
-void testCornerDetector()
+void LoadImages(const string &strImageFilename, vector<string> &vstrImageFilenamesRGB, vector<double> &vTimestamps)
 {
-    std::string img_name(svo::test_utils::getDatasetDir() + "/sin2_tex2_h1_v8_d/img/frame_000002_0.png");
-    printf("Loading image '%s'\n", img_name.c_str());
-    cv::Mat img(cv::imread(img_name, 0));
-    assert(img.type() == CV_8UC1 && !img.empty());
-
-    vk::AbstractCamera* cam = new vk::ATANCamera(752, 480, 0.511496, 0.802603, 0.530199, 0.496011, 0.934092);
-    svo::FramePtr frame(new svo::Frame(cam, img, 0.0));
-
-    // Corner detection
-    vk::Timer t;
-    svo::Features fts;
-    svo::feature_detection::FastDetector fast_detector(img.cols, img.rows, svo::Config::gridSize(), svo::Config::nPyrLevels());
-    for(int i=0; i<100; ++i)
+    ifstream fAssociation;
+    fAssociation.open(strImageFilename.c_str());
+    while(!fAssociation.eof())
     {
-        fast_detector.detect(frame.get(), frame->img_pyr_, svo::Config::triangMinCornerScore(), fts);
+        string s;
+        //! read the first three lines of txt file
+        getline(fAssociation,s);
+        getline(fAssociation,s);
+        getline(fAssociation,s);
+        getline(fAssociation,s);
+
+        if(!s.empty())
+        {
+            stringstream ss;
+            ss << s;
+            double t;
+            string sRGB, sD;
+            ss >> t;
+            vTimestamps.push_back(t);
+            ss >> sRGB;
+            vstrImageFilenamesRGB.push_back(sRGB);
+            ss >> t;
+            ss >> sD;
+            //vstrImageFilenamesD.push_back(sD);
+
+        }
     }
-    printf("Fast corner detection took %f ms, %zu corners detected (ref i7-W520: 7.166360ms, 40000)\n", t.stop()*10, fts.size());
-    printf("Note, in this case, feature detection also contains the cam2world projection of the feature.\n");
-
-    // Paint the fast corners
-    cv::Mat img_rgb = cv::Mat(img.size(), CV_8UC3);
-    cv::cvtColor(img, img_rgb, CV_GRAY2RGB);
-    std::for_each(fts.begin(), fts.end(), [&](svo::Feature* i)
-    {
-        cv::circle(img_rgb, cv::Point2f(i->px[0], i->px[1]), 4*(i->level+1), cv::Scalar(0,255,0), 1);
-    }
-    );
-    cv::imshow("ref_img", img_rgb);
-    cv::waitKey(0);
-
-    std::for_each(fts.begin(), fts.end(), [&](svo::Feature* i){ delete i; });
-    }
-
-} // namespace
-
+}
 
 int main(int argc, char **argv)
 {
-    testCornerDetector();
-    return 0;
+
+    vk::AbstractCamera* cam = new vk::ATANCamera(640, 480, 0.511496, 0.802603, 0.530199, 0.496011, 0.934092);
+
+    vector<double> dTimestamps;
+    vector<string> dImageNames;
+    string Datasets_Dir = "/home/buyi/Datasets/longhouse";
+    string strImageFile = Datasets_Dir + "/rgb.txt";
+    LoadImages(strImageFile, dImageNames, dTimestamps);
+
+    int nImages = dImageNames.size();
+
+    cv::Mat Image, Image_tmp;
+
+    double start = static_cast<double>(cvGetTickCount());
+    for (int i = 0; i < nImages; ++i)
+    {
+        string img_path = Datasets_Dir + "/" + dImageNames[i];
+        Image = cv::imread(img_path.c_str(), CV_LOAD_IMAGE_GRAYSCALE);
+
+        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+        clahe->apply(Image, Image_tmp);
+
+        svo::FramePtr frame(new svo::Frame(cam, Image_tmp, 0.0));
+        svo::Features fts;
+        svo::feature_detection::FastDetector fast_detector(
+                Image_tmp.cols, Image_tmp.rows, svo::Config::gridSize(), svo::Config::nPyrLevels());
+        fast_detector.detect(frame.get(), frame->img_pyr_, svo::Config::triangMinCornerScore(), fts);
+
+
+        cv::Mat Image_new = Image_tmp.clone();
+        if(Image_new.channels() < 3)
+            cv::cvtColor(Image_new, Image_new, CV_GRAY2BGR);
+        for_each(fts.begin(), fts.end(), [&](svo::Feature* feature)
+        {
+            cv::rectangle(Image_new,
+                          cv::Point2f(feature->px[0] - 2, feature->px[1] - 2),
+                          cv::Point2f(feature->px[0] + 2, feature->px[1] + 2),
+                          cv::Scalar (0, 255, 0));
+        });
+
+        cv::namedWindow("Feature_Detect");
+        cv::imshow("Feature_Detect", Image_new);
+        cv::waitKey(1);
+
+    }
+    double time = ((double)cvGetTickCount() - start) / cvGetTickFrequency();
+    cout << time/647 << "us" << endl;
+    return  0;
 }

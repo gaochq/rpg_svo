@@ -11,7 +11,7 @@ SET(DEBUG_OUTPUT FALSE) # Only relevant if build without ROS
 SET(PROJECT_NAME svo)
 PROJECT(${PROJECT_NAME})
 CMAKE_MINIMUM_REQUIRED (VERSION 2.8.3)
-SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
+#SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
 SET(CMAKE_VERBOSE_MAKEFILE OFF)
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/")
 
@@ -148,4 +148,7 @@ ADD_EXECUTABLE(test_sparse_img_align test/test_sparse_img_align.cpp)
 TARGET_LINK_LIBRARIES(test_sparse_img_align svo)
 
 ADD_EXECUTABLE(test_pose_optimizer test/test_pose_optimizer.cpp)
-TARGET_LINK_LIBRARIES(test_pose_optimizer svo) 
+TARGET_LINK_LIBRARIES(test_pose_optimizer svo)
+
+ADD_EXECUTABLE(test_feature_detect test/test_feature_detect.cpp)
+TARGET_LINK_LIBRARIES(test_feature_detect svo)

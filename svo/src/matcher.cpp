@@ -51,18 +51,22 @@ void getWarpMatrixAffine(const vk::AbstractCamera& cam_ref, const vk::AbstractCa
     //! 3D点在ref下的坐标
     const Vector3d xyz_ref(f_ref*depth_ref);
 
-    //! 加了patch之后变换到世界坐标系下
+    //! 构成一个直角三角形，并将其变换到世界坐标系之下。(实际是相机坐标系下)
     Vector3d xyz_du_ref(cam_ref.cam2world(px_ref + Vector2d(halfpatch_size,0)*(1<<level_ref)));
     Vector3d xyz_dv_ref(cam_ref.cam2world(px_ref + Vector2d(0,halfpatch_size)*(1<<level_ref)));
 
-    //! 求取仿射变换后的点
+    //! 将变换后的三角形的另外两个定点，加上深度信息。因为这几个像素点离得近，所以可以认为深度值是一致的
     xyz_du_ref *= xyz_ref[2]/xyz_du_ref[2];
     xyz_dv_ref *= xyz_ref[2]/xyz_dv_ref[2];
+
+    //! 转到当前的图像平面上
     const Vector2d px_cur(cam_cur.world2cam(T_cur_ref*(xyz_ref)));
     const Vector2d px_du(cam_cur.world2cam(T_cur_ref*(xyz_du_ref)));
     const Vector2d px_dv(cam_cur.world2cam(T_cur_ref*(xyz_dv_ref)));
 
     //! 如果没有发生仿射变换，这个地方求出的A矩阵，就是一个单位矩阵
+    //! 如果只有尺度变换的话，主对角线有值，副对角线为0，副对角线代表了旋转。
+    //! 因为没有平移变换，所以最终的仿射矩阵是一个2*2的矩阵
     A_cur_ref.col(0) = (px_du - px_cur)/halfpatch_size;
     A_cur_ref.col(1) = (px_dv - px_cur)/halfpatch_size;
 }
