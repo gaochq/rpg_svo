@@ -97,10 +97,11 @@ Matrix<double, 6, 6> SparseImgAlign::getFisherInformation()
 }
 
 /**
- * 提前计算参考帧的patch块
+ * 提前计算参考帧的patch块的雅克比矩阵
  */
 void SparseImgAlign::precomputeReferencePatches()
 {
+    //! Step1: 对当前的图像和特征点进行尺度变换
     const int border = patch_halfsize_+1;
     //! 读取当前金字塔层的参考帧图像
     const cv::Mat& ref_img = ref_frame_->img_pyr_.at(level_);
@@ -118,7 +119,7 @@ void SparseImgAlign::precomputeReferencePatches()
     {
         //! 确保，参考帧的Feature做了尺度变换之后，对应的Patch还在图像之内
         // check if reference with patch size is within image
-        //! 这个地方的尺度变换是什么意思。。。
+        //! 这个地方的尺度变换是什么意思。。。(因为图像做了尺度变换，相应的之前得到的特征点的位置也要做尺度变换)
         const float u_ref = (*it)->px[0]*scale;
         const float v_ref = (*it)->px[1]*scale;
         const int u_ref_i = floorf(u_ref);
@@ -131,11 +132,13 @@ void SparseImgAlign::precomputeReferencePatches()
         const double depth(((*it)->point->pos_ - ref_pos).norm());
         const Vector3d xyz_ref((*it)->f*depth);
 
+        //！ Step2：求取参考图像在点xyz_ref的雅克比矩阵，对应论文(11)式下面的公式
         //! 估计投影的雅克比矩阵
         // evaluate projection jacobian
         Matrix<double,2,6> frame_jac;
         Frame::jacobian_xyz2uv(xyz_ref, frame_jac);
 
+        //! Step3:求取链式法则中的第一项
         //! 对做了尺度变换的特征点进行双线性插值操作，得到四个权重
         // compute bilateral interpolation weights for reference image
         const float subpix_u_ref = u_ref-u_ref_i;
@@ -146,13 +149,13 @@ void SparseImgAlign::precomputeReferencePatches()
         const float w_ref_br = subpix_u_ref * subpix_v_ref;
         size_t pixel_counter = 0;
 
-        //! 获取Patch块在参考帧图像上的地址
+        //! 获取参考patch块的首地址
         float* cache_ptr = reinterpret_cast<float*>(ref_patch_cache_.data) + patch_area_*feature_counter;
 
-        //! 处理单个patch
+        //! 处理单个patch，这里的patch1是在参考图像上的
         for(int y=0; y<patch_size_; ++y)
         {
-            //! 获取Patch块左上角的像素点地址
+            //! 获取参考图像Patch块左上角的像素点地址
             uint8_t* ref_img_ptr = (uint8_t*) ref_img.data + (v_ref_i+y-patch_halfsize_)*stride + (u_ref_i-patch_halfsize_);
             for(int x=0; x<patch_size_; ++x, ++ref_img_ptr, ++cache_ptr, ++pixel_counter)
             {
@@ -170,7 +173,7 @@ void SparseImgAlign::precomputeReferencePatches()
                   -(w_ref_tl*ref_img_ptr[-stride] + w_ref_tr*ref_img_ptr[1-stride] + w_ref_bl*ref_img_ptr[0] + w_ref_br*ref_img_ptr[1]));
 
                 //! 参考论文式(11)中雅克比矩阵的链式展开((11)式下面的式子）,这里再乘上梯度就是完整的雅克比矩阵
-                // cache the jacobian
+                // cache the jacobian  1*2*2*6=1*6
                 jacobian_cache_.col(feature_counter*patch_area_ + pixel_counter) =
                     (dx*frame_jac.row(0) + dy*frame_jac.row(1))*(focal_length / (1<<level_));
             }
@@ -182,7 +185,7 @@ void SparseImgAlign::precomputeReferencePatches()
 //! 计算光度误差
 double SparseImgAlign::computeResiduals(const SE3& T_cur_from_ref, bool linearize_system, bool compute_weight_scale)
 {
-    //! 对当前图像进行Wrap处理以对应参考图像
+    //! Step1：对当前图像进行尺度变换
     // Warp the (cur)rent image such that it aligns with the (ref)erence image
     const cv::Mat& cur_img = cur_frame_->img_pyr_.at(level_);
 
@@ -212,6 +215,7 @@ double SparseImgAlign::computeResiduals(const SE3& T_cur_from_ref, bool lineariz
             continue;
 
         //! 计算特征点在当前帧上的投影位置
+        //! question: 这个地方为什么不直接使用Feature对应的3D点呢
         // compute pixel location in cur img
         const double depth = ((*it)->point->pos_ - ref_pos).norm();
 
@@ -238,7 +242,7 @@ double SparseImgAlign::computeResiduals(const SE3& T_cur_from_ref, bool lineariz
         const float w_cur_bl = (1.0-subpix_u_cur) * subpix_v_cur;
         const float w_cur_br = subpix_u_cur * subpix_v_cur;
 
-        //! 获取Patch块的地址
+        //! 获取Patch块的地址, 参考patch在计算残差的时候就已经存入了value
         float* ref_patch_cache_ptr = reinterpret_cast<float*>(ref_patch_cache_.data) + patch_area_*feature_counter;
         size_t pixel_counter = 0; // is used to compute the index of the cached jacobian
         for(int y=0; y<patch_size_; ++y)

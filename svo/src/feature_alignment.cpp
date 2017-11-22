@@ -196,7 +196,7 @@ bool align2D(const cv::Mat& cur_img, uint8_t* ref_patch_with_border,
     float* it_dy = ref_patch_dy;
     for(int y=0; y<patch_size_; ++y)
     {
-        //! 求取扩展patch中patch范围内的梯度
+        //! 求取扩展patch中patch范围内的梯度(从第二行第二列开始)
         uint8_t* it = ref_patch_with_border + (y+1)*ref_step + 1;
         for(int x=0; x<patch_size_; ++x, ++it, ++it_dx, ++it_dy)
         {

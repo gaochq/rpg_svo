@@ -152,7 +152,7 @@ void SparseImgAlignTest::testSequence(
 int main(int argc, char** argv)
 {
   std::string experiment_name("flying_room_1_rig_1_fast_minlev0");
-  std::string dataset_dir(svo::test_utils::getDatasetDir() + "/sin2_tex2_h1_v8_d");
+  std::string dataset_dir("/home/buyi/Datasets/longhouse");
   svo::Config::triangMinCornerScore() = 20;
   svo::Config::kltMinLevel() = 0;
   SparseImgAlignTest test;

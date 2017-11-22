@@ -206,8 +206,9 @@ void trackKlt(FramePtr frame_ref, FramePtr frame_cur, vector<cv::Point2f>& px_re
  * @param f_cur
  * @param focal_length
  * @param reprojection_threshold
- * @param inliers
- * @param xyz_in_cur
+ * @param inliers                   计算出的内点标志
+ * @param xyz_in_cur                三角化之后的3D点
+ * https://github.com/uzh-rpg/rpg_vikit/blob/10871da6d84c8324212053c40f468c6ab4862ee0/vikit_common/src/math_utils.cpp#L83
  * @param 由H矩阵解算出的位姿
  */
 void computeHomography(const vector<Vector3d>& f_ref, const vector<Vector3d>& f_cur,
@@ -231,9 +232,9 @@ void computeHomography(const vector<Vector3d>& f_ref, const vector<Vector3d>& f_
     //! 这个地方的内外点是由计算出内外点，是由上面计算出的位姿做重投影误差判断出来的，两个(参考帧和当前帧上)
     //! 为什么不使用Ransac计算H矩阵的时候，计算外点呢。
     vk::computeInliers(f_cur, f_ref, Homography.T_c2_from_c1.rotation_matrix(),
-            Homography.T_c2_from_c1.translation(),
-            reprojection_threshold, focal_length,
-            xyz_in_cur, inliers, outliers);
+                       Homography.T_c2_from_c1.translation(),
+                       reprojection_threshold, focal_length,
+                       xyz_in_cur, inliers, outliers);
 
     //! 通过H矩阵恢复出两帧位姿
     T_cur_from_ref = Homography.T_c2_from_c1;

@@ -127,7 +127,7 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processSecondFrame()
     //! 将第二帧设为关键帧，已经满足了角点个数大于阈值，视差角大于阈值的判断。
     new_frame_->setKeyframe();
 
-    //! 求取该帧特征点在相机坐标系下深度值的平均值和最小值
+    //! 求取该帧特征点在相机坐标系下深度值的平均值和最小值，第二帧的3D点是由和第一帧三角化得到的
     double depth_mean, depth_min;
     frame_utils::getSceneDepth(*new_frame_, depth_mean, depth_min);
 
@@ -352,14 +352,16 @@ void FrameHandlerMono::setFirstFrame(const FramePtr& first_frame)
     stage_ = STAGE_DEFAULT_FRAME;
 }
 
+//! 判断tracking是否需要关键帧
 bool FrameHandlerMono::needNewKf(double scene_depth_mean)
 {
+    //! 遍历和当前帧有共视关系的所有关键帧，只有当前帧的深度中值对于所有关键帧都满足一定的阈值才插入关键帧
     for(auto it=overlap_kfs_.begin(), ite=overlap_kfs_.end(); it!=ite; ++it)
     {
         Vector3d relpos = new_frame_->w2f(it->first->pos());
         if(fabs(relpos.x())/scene_depth_mean < Config::kfSelectMinDist() &&
-        fabs(relpos.y())/scene_depth_mean < Config::kfSelectMinDist()*0.8 &&
-        fabs(relpos.z())/scene_depth_mean < Config::kfSelectMinDist()*1.3)
+            fabs(relpos.y())/scene_depth_mean < Config::kfSelectMinDist()*0.8 &&
+            fabs(relpos.z())/scene_depth_mean < Config::kfSelectMinDist()*1.3)
             return false;
     }
     return true;

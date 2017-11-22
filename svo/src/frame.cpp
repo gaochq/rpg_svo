@@ -195,6 +195,7 @@ bool getSceneDepth(const Frame& frame, double& depth_mean, double& depth_min)
     vector<double> depth_vec;
     depth_vec.reserve(frame.fts_.size());
     depth_min = std::numeric_limits<double>::max();
+
     for(auto it=frame.fts_.begin(), ite=frame.fts_.end(); it!=ite; ++it)
     {
         if((*it)->point != NULL)
@@ -204,13 +205,15 @@ bool getSceneDepth(const Frame& frame, double& depth_mean, double& depth_min)
             depth_min = fmin(z, depth_min);
         }
     }
+
     if(depth_vec.empty())
     {
         SVO_WARN_STREAM("Cannot set scene depth. Frame has no point-observations!");
         return false;
     }
+
     depth_mean = vk::getMedian(depth_vec);
-        return true;
+    return true;
 }
 
 } // namespace frame_utils
