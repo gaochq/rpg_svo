@@ -82,7 +82,7 @@ size_t SparseImgAlign::run(FramePtr ref_frame, FramePtr cur_frame)
             printf("\nPYRAMID LEVEL %i\n---------------\n", level_);
         optimize(T_cur_from_ref);
     }
-    //! 更新位姿
+    //! 更新位姿当前帧的位姿
     cur_frame_->T_f_w_ = T_cur_from_ref * ref_frame_->T_f_w_;
 
     //! 返回跟踪到的特征点个数
@@ -114,6 +114,7 @@ void SparseImgAlign::precomputeReferencePatches()
     const double focal_length = ref_frame_->cam_->errorMultiplier2();
     size_t feature_counter = 0;
 
+    //! 遍历参考帧的每一个Features
     std::vector<bool>::iterator visiblity_it = visible_fts_.begin();
     for(auto it=ref_frame_->fts_.begin(), ite=ref_frame_->fts_.end(); it!=ite; ++it, ++feature_counter, ++visiblity_it)
     {
@@ -159,7 +160,7 @@ void SparseImgAlign::precomputeReferencePatches()
             uint8_t* ref_img_ptr = (uint8_t*) ref_img.data + (v_ref_i+y-patch_halfsize_)*stride + (u_ref_i-patch_halfsize_);
             for(int x=0; x<patch_size_; ++x, ++ref_img_ptr, ++cache_ptr, ++pixel_counter)
             {
-                //! 得到线性差值之后的灰度值
+                //! 得到线性差值之后的灰度值，往参考Patch块中装东西，在求取残差的时候会用到
                 // precompute interpolated reference patch color
                 *cache_ptr = w_ref_tl*ref_img_ptr[0] + w_ref_tr*ref_img_ptr[1] + w_ref_bl*ref_img_ptr[stride] + w_ref_br*ref_img_ptr[stride+1];
 
@@ -173,7 +174,7 @@ void SparseImgAlign::precomputeReferencePatches()
                   -(w_ref_tl*ref_img_ptr[-stride] + w_ref_tr*ref_img_ptr[1-stride] + w_ref_bl*ref_img_ptr[0] + w_ref_br*ref_img_ptr[1]));
 
                 //! 参考论文式(11)中雅克比矩阵的链式展开((11)式下面的式子）,这里再乘上梯度就是完整的雅克比矩阵
-                // cache the jacobian  1*2*2*6=1*6
+                // cache the jacobian  1*2*2*6=1*6, 注意雅克比矩阵的维数
                 jacobian_cache_.col(feature_counter*patch_area_ + pixel_counter) =
                     (dx*frame_jac.row(0) + dy*frame_jac.row(1))*(focal_length / (1<<level_));
             }
@@ -280,7 +281,7 @@ double SparseImgAlign::computeResiduals(const SE3& T_cur_from_ref, bool lineariz
                     H_.noalias() += J*J.transpose()*weight;
                     Jres_.noalias() -= J*res*weight;
                     if(display_)
-                    resimg_.at<float>((int) v_cur+y-patch_halfsize_, (int) u_cur+x-patch_halfsize_) = res/255.0;
+                        resimg_.at<float>((int) v_cur+y-patch_halfsize_, (int) u_cur+x-patch_halfsize_) = res/255.0;
                 }
             }
         }
@@ -307,6 +308,7 @@ void SparseImgAlign::update(
     const ModelType& T_curold_from_ref,
     ModelType& T_curnew_from_ref)
 {
+    //! Question: 这个地方不应该取负号啊
     T_curnew_from_ref =  T_curold_from_ref * SE3::exp(-x_);
 }
 

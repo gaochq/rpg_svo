@@ -78,7 +78,7 @@ public:
     /// The grid stores a set of candidate matches. For every grid cell we try to find one match.
     struct Grid
     {
-        CandidateGrid cells;        //! 存放3D点和对应投影的2D像素坐标
+        CandidateGrid cells;        //! 存放3D点和对应投影的2D像素坐标  vector< list<Candidate> >：每一个格子由一个list组成，然后最后从中选一个Candidate
         vector<int> cell_order;     //！ 单元格的顺序编号
         int cell_size;              //！ 图像划分单元格的列数
         int grid_n_cols;            //！ 图像划分单元格的行数

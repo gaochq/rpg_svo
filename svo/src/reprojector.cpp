@@ -82,7 +82,7 @@ void Reprojector::reprojectMap(FramePtr frame, std::vector< std::pair<FramePtr,s
     //! Step1：将格子复位
     resetGrid();
 
-    //！Step2：挑选与当前帧有共视关系的关键帧
+    //！Step2：挑选与当前帧有共视关系的关键帧, 返回的共视关系的形式为： list<piar<共视帧地址， 共视帧与当前帧的欧氏距离>>
     // Identify those Keyframes which share a common field of view.
     SVO_START_TIMER("reproject_kfs");
     list< pair<FramePtr,double> > close_kfs;
@@ -101,7 +101,7 @@ void Reprojector::reprojectMap(FramePtr frame, std::vector< std::pair<FramePtr,s
     size_t n = 0;
     overlap_kfs.reserve(options_.max_n_kfs);
 
-    //! Step4：在close_kfs中按照最近的10个帧遍历, 并添加overlap_kfs的第二个参数，即mappoint的个数
+    //! Step4：在close_kfs中按照最近的10个帧遍历, 并添加overlap_kfs的第二个参数，即满足共视关系的mappoint的个数
     for(auto it_frame=close_kfs.begin(), ite_frame=close_kfs.end(); it_frame!=ite_frame && n<options_.max_n_kfs; ++it_frame, ++n)
     {
         //！ Step4.1：加入overlap_kfs的第一个参数(共视帧)
@@ -116,6 +116,7 @@ void Reprojector::reprojectMap(FramePtr frame, std::vector< std::pair<FramePtr,s
             if((*it_ftr)->point == NULL)
                 continue;
 
+            //! 一个3D点会对应多个Features，因为是按照frame的feature遍历的，所以每一个3D点只投影一次就够。
             // make sure we project a point only once
             if((*it_ftr)->point->last_projected_kf_id_ == frame->id_)
                 continue;
@@ -155,12 +156,13 @@ void Reprojector::reprojectMap(FramePtr frame, std::vector< std::pair<FramePtr,s
     // Now we go through each grid cell and select one point to match.
     // At the end, we should have at maximum one reprojected point per cell.
     //! Step6: 遍历每一个Gridcell。通过投影之后，每一个格子会有多个投影点，最终只选择一个质量最好的。
+    //! Question: 在哪里选择的每一个格子最多只有一个投影点。
     SVO_START_TIMER("feature_align");
     for(size_t i=0; i<grid_.cells.size(); ++i)
     {
         // we prefer good quality points over unkown quality (more likely to match)
         // and unknown quality over candidates (position not optimized)
-        //! cell_order: vector<int>
+        //! cell_order: vector<int>  cells: vector<list<candiante>>
         if(reprojectCell(*grid_.cells.at(grid_.cell_order[i]), frame))
             ++n_matches_;
 
@@ -182,7 +184,7 @@ bool Reprojector::pointQualityComparator(Candidate& lhs, Candidate& rhs)
 /**
  * 经过reprojectMap，每个格子会有很多Features，然后在每个格子中只选择一个最好的添加到当前帧
  * 遍历所有cell，将其投影到当前帧上
- * @param cell
+ * @param cell      std::list<Candidate >, Candidate: Point3d--Feature
  * @param frame
  * @return
  */
@@ -215,8 +217,11 @@ bool Reprojector::reprojectCell(Cell& cell, FramePtr frame)
         if(!found_match)
         {
             it->pt->n_failed_reproj_++;
+
+            //! 在地图中删除
             if(it->pt->type_ == Point::TYPE_UNKNOWN && it->pt->n_failed_reproj_ > 15)
                 map_.safeDeletePoint(it->pt);
+            //! 在候选地图点之中删除
             if(it->pt->type_ == Point::TYPE_CANDIDATE  && it->pt->n_failed_reproj_ > 30)
                 map_.point_candidates_.deleteCandidatePoint(it->pt);
             it = cell.erase(it);
@@ -255,6 +260,12 @@ bool Reprojector::reprojectCell(Cell& cell, FramePtr frame)
 }
 
 //! 重投影3D点，将投影在帧内的像素点，作为候选特征，往grid中存投影成功的候选点
+/**
+ *  将3D点投影到图像平面上对应的8*8的cell中
+ * @param frame     需要对齐Features的关键帧
+ * @param point     世界坐标系下的3D点
+ * @return
+ */
 bool Reprojector::reprojectPoint(FramePtr frame, Point* point)
 {
     Vector2d px(frame->w2c(point->pos_));

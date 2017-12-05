@@ -96,7 +96,7 @@ void Point::initNormal()
     normal_set_ = true;
 }
 
-//! 寻找观测到该特征点的，最小视差角的两帧
+//! 寻找观测到该3D点在，与当前帧视差角最小的关键帧上的投影
 bool Point::getCloseViewObs(const Vector3d& framepos, Feature*& ftr) const
 {
     // TODO: get frame with same point of view AND same pyramid level!

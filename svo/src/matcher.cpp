@@ -107,6 +107,8 @@ void warpAffine(
 {
     const int patch_size = halfpatch_size*2 ;
     const Matrix2f A_ref_cur = A_cur_ref.inverse().cast<float>();
+
+    //! Question: 这里应该本来就没有平移量吧？
     if(isnan(A_ref_cur(0,0)))
     {
         printf("Affine warp is NaN, probably camera has no translation\n"); // TODO
@@ -173,6 +175,7 @@ void Matcher::createPatchFromPatchWithBorder()
     uint8_t* ref_patch_ptr = patch_;
     for(int y=1; y<patch_size_+1; ++y, ref_patch_ptr += patch_size_)
     {
+        //! 获取行首地址+1
         uint8_t* ref_patch_border_ptr = patch_with_border_ + y*(patch_size_+2) + 1;
         for(int x=0; x<patch_size_; ++x)
             ref_patch_ptr[x] = ref_patch_border_ptr[x];
@@ -183,6 +186,7 @@ void Matcher::createPatchFromPatchWithBorder()
 bool Matcher::findMatchDirect(const Point& pt, const Frame& cur_frame, Vector2d& px_cur)
 {
     //! Step1:寻找对于3D点pt来说，与当前帧视差角最小的一个共视帧上的投影点(ref_ftr_)
+    //! Question：为什么不在一开始就去找这个Feature呢
     if(!pt.getCloseViewObs(cur_frame.pos(), ref_ftr_))
         return false;
 
@@ -204,7 +208,8 @@ bool Matcher::findMatchDirect(const Point& pt, const Frame& cur_frame, Vector2d&
     warp::warpAffine(A_cur_ref_, ref_ftr_->frame->img_pyr_[ref_ftr_->level], ref_ftr_->px,
     ref_ftr_->level, search_level_, halfpatch_size_+1, patch_with_border_);
 
-    //！ Step5:获取去掉边界的扩展patch
+    //！ Step5:获取去掉边界的扩展patch，注意这里求出来的patch块是在参考图像上的
+    //！ Question: 为什么要先做扩展patch块的仿射变换，然后剔除patch呢，为什么不一次性做patch的？？？
     createPatchFromPatchWithBorder();
 
     //! 对特征点进行尺度变换
@@ -230,6 +235,8 @@ bool Matcher::findMatchDirect(const Point& pt, const Frame& cur_frame, Vector2d&
         cur_frame.img_pyr_[search_level_], patch_with_border_, patch_,
         options_.align_max_iter, px_scaled);
     }
+
+    //! 恢复到原尺度下
     px_cur = px_scaled * (1<<search_level_);
     return success;
 }

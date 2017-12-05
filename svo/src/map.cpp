@@ -112,7 +112,12 @@ void Map::addKeyframe(FramePtr new_keyframe)
     keyframes_.push_back(new_keyframe);
 }
 
-//! 获取与当前帧具有共视关系的关键帧，存入两帧在世界坐标系下的欧式距离
+/**
+ * 获取与当前帧具有共视关系的关键帧，存入两帧在世界坐标系下的欧式距离。只要存在一个共视的mappoint就算共视
+ * 返回的共视关系的形式为： list<piar<共视帧地址， 共视帧与当前帧的欧氏距离>>
+ * @param frame         当前关键帧
+ * @param close_kfs     共视的关键帧链表
+ */
 void Map::getCloseKeyframes(const FramePtr& frame, std::list< std::pair<FramePtr,double> >& close_kfs) const
 {
     for(auto kf : keyframes_)
@@ -233,6 +238,7 @@ void MapPointCandidates::newCandidatePoint(Point* point, double depth_sigma2)
 //! 在当前帧中加入特征点，并删除候选点
 void MapPointCandidates::addCandidatePointToFrame(FramePtr frame)
 {
+    //candidates_: list<PointCandidate>  pair<Point*, Feature*> PointCandidate;
     boost::unique_lock<boost::mutex> lock(mut_);
     PointCandidateList::iterator it=candidates_.begin();
     while(it != candidates_.end())

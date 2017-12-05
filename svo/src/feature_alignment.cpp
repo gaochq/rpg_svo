@@ -159,10 +159,10 @@ bool align1D(const cv::Mat& cur_img, const Vector2f& dir,                  // di
 /**
  *  逆向构造对齐
  * @param cur_img               指定搜索层的金字塔图像
- * @param ref_patch_with_border 扩展patch
- * @param ref_patch             patch
+ * @param ref_patch_with_border 扩展patch, 属于参考图像
+ * @param ref_patch             patch，  属于参考图像
  * @param n_iter                最大迭代次数
- * @param cur_px_estimate       要估计的Feature位置
+ * @param cur_px_estimate       当前帧中，要估计的Feature位置，初值为3D点的投影，然后做尺度变化呢之后的坐标
  * @param no_simd
  * @return
  *      该部分内容参考 Lucas-Kanade 20 Years On: A Unifying Framework
@@ -218,6 +218,7 @@ bool align2D(const cv::Mat& cur_img, uint8_t* ref_patch_with_border,
 
     // termination condition
     const float min_update_squared = 0.03*0.03;
+    //! 列的个数
     const int cur_step = cur_img.step.p[0];
     //  float chi2 = 0;
     //！Step2：开始迭代计算
@@ -243,23 +244,27 @@ bool align2D(const cv::Mat& cur_img, uint8_t* ref_patch_with_border,
         float wBR = subpix_x * subpix_y;
 
         // loop through search_patch, interpolate
+        //! 获取Patch块的首地址
         uint8_t* it_ref = ref_patch;
 
-        //！ 包含了patch块的梯度（下面的雅克比矩阵）
+        //！ 获取patch块梯度的首地址（下面的雅克比矩阵）
         float* it_ref_dx = ref_patch_dx;
         float* it_ref_dy = ref_patch_dy;
         //float new_chi2 = 0.0;
 
         //！Step3.2：计算残差，以及增量求解式的右端
         //！patch块以(u_r, v_r)为中心
-        Vector3f Jres; Jres.setZero();
+        Vector3f Jres;
+        Jres.setZero();
         for(int y=0; y<patch_size_; ++y)
         {
+            //! 在当前帧上以匹配点为中心的patch块的首地址
             uint8_t* it = (uint8_t*) cur_img.data + (v_r+y-halfpatch_size_)*cur_step + u_r-halfpatch_size_;
             for(int x=0; x<patch_size_; ++x, ++it, ++it_ref, ++it_ref_dx, ++it_ref_dy)
             {
-                //! 求取残差：T(x) - I(W(x;p))
+                //! 以匹配点为标准的双插
                 float search_pixel = wTL*it[0] + wTR*it[1] + wBL*it[cur_step] + wBR*it[cur_step+1];
+                //! 求取残差：I(W(x;p)) - T(x) + I'
                 float res = search_pixel - *it_ref + mean_diff;
                 Jres[0] -= res*(*it_ref_dx);
                 Jres[1] -= res*(*it_ref_dy);
